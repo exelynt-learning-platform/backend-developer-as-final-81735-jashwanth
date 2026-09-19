@@ -14,3 +14,5 @@ app:
   jwt:
     secret: VGhpc0lzQVNlY3VyZVN1ZmZpY2llbnRMb25nSldUSFNlY3JldEZvclRlc3RpbmcxMjM0NTY3ODkw
     expiration-ms: 86400000
+  seed:
+    enabled: false

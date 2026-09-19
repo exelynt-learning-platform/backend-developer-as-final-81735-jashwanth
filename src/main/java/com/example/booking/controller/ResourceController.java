@@ -3,6 +3,7 @@ package com.example.booking.controller;
 import com.example.booking.dto.*;
 import com.example.booking.service.ResourceService;
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
+@SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/resources")
 public class ResourceController {
     private final ResourceService resourceService;

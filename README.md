@@ -1,40 +1,28 @@
 # Resource Booking System
 
-Secure RESTful Resource Booking System built with:
-
-- Java 17
-- Spring Boot
-- Spring Security
-- JWT authentication
-- BCrypt password hashing
-- Spring Data JPA / Hibernate
-- PostgreSQL
-- Bean Validation
-- Swagger / OpenAPI
-- Maven
-- JUnit / Spring Security Test
+Secure RESTful Resource Booking System built with Java 17, Spring Boot, Spring Security, JWT, Spring Data JPA/Hibernate, PostgreSQL, Bean Validation, Swagger/OpenAPI, Maven, JUnit, MockMvc, and Spring Security Test.
 
 ## Features
 
-- JWT login with `POST /auth/login`
-- ADMIN and USER roles
-- Stateless JWT security
-- BCrypt password encoding
-- ADMIN full CRUD for resources
+- JWT authentication with `POST /auth/login`
+- Stateless Spring Security configuration
+- BCrypt password hashing
+- `ADMIN` and `USER` role-based access control
+- ADMIN full CRUD access to resources and reservations
 - USER read-only access to resources
-- Reservation creation using authenticated JWT identity
-- USER can access only their own reservations
-- ADMIN can access all reservations
+- USER can create reservations and update/view only their own reservations
+- Reservation identity always comes from the authenticated JWT; request bodies never accept a user id
 - Reservation statuses: `PENDING`, `CONFIRMED`, `CANCELLED`
-- Decimal reservation prices
-- Reservation filtering by status, minimum price and maximum price
-- Pagination with `page` and `size`
-- Optional sorting with `sort=field,asc|desc`
-- Validation and structured error responses
-- PostgreSQL persistence with JPA/Hibernate
-- Swagger UI
-- Seed ADMIN and USER accounts
+- Decimal reservation price calculation
 - Reservation overlap protection
+- Filtering by status, minimum price, and maximum price
+- Pagination using `page` and `size`
+- Optional sorting using `sort=field,asc|desc`
+- Structured validation and error responses
+- PostgreSQL persistence with JPA/Hibernate
+- Swagger/OpenAPI documentation
+- Environment-configurable seed users; no plaintext seed passwords are stored in source code
+- H2-based integration tests so `mvn clean test` does not require a local PostgreSQL instance
 
 ## Project Structure
 
@@ -52,41 +40,58 @@ src/main/java/com/example/booking
 
 ## Database Setup
 
-Create PostgreSQL database:
+Create the PostgreSQL database:
 
 ```sql
 CREATE DATABASE resource_booking;
 ```
 
-Default local configuration:
+## Required Environment Variables
 
-```text
-DB_URL=jdbc:postgresql://localhost:5432/resource_booking
-DB_USERNAME=postgres
-DB_PASSWORD=postgres
+The application deliberately does not keep database passwords, JWT secrets, or seed passwords in source code.
+
+PowerShell example:
+
+```powershell
+$env:DB_URL="jdbc:postgresql://localhost:5432/resource_booking"
+$env:DB_USERNAME="postgres"
+$env:DB_PASSWORD="your_postgres_password"
+$env:JWT_SECRET="replace_with_a_long_random_secret_at_least_32_bytes"
+$env:JWT_EXPIRATION_MS="86400000"
+$env:PORT="8080"
 ```
 
-## Environment Variables
+## Optional Seed Users
 
-```text
-DB_URL=jdbc:postgresql://localhost:5432/resource_booking
-DB_USERNAME=postgres
-DB_PASSWORD=your_password
-JWT_SECRET=your_long_random_secret_key_at_least_32_bytes
-JWT_EXPIRATION_MS=86400000
-PORT=8080
+To create test ADMIN and USER accounts automatically, enable seeding and provide credentials through environment variables:
+
+```powershell
+$env:SEED_USERS_ENABLED="true"
+$env:SEED_ADMIN_USERNAME="admin"
+$env:SEED_ADMIN_PASSWORD="choose_a_strong_admin_password"
+$env:SEED_USER_USERNAME="user"
+$env:SEED_USER_PASSWORD="choose_a_strong_user_password"
 ```
 
-For production, always replace the development JWT secret and database credentials.
+When `SEED_USERS_ENABLED=false` (the default), no seed credentials are created. This prevents hardcoded passwords from being committed to the repository.
 
-## Run
+## Build and Test
 
 ```bash
 mvn clean test
+```
+
+The test profile uses an in-memory H2 database in PostgreSQL compatibility mode. Tests cover authentication, JWT validation, RBAC, resource CRUD, reservation ownership, USER own-reservation updates, ADMIN access, cancellation, overlap prevention, filtering, pagination, sorting, validation, error responses, and Swagger availability.
+
+## Run
+
+After setting the required PostgreSQL and JWT environment variables:
+
+```bash
 mvn spring-boot:run
 ```
 
-The API runs at:
+Application:
 
 ```text
 http://localhost:8080
@@ -104,18 +109,6 @@ OpenAPI JSON:
 http://localhost:8080/v3/api-docs
 ```
 
-## Seed Credentials
-
-```text
-ADMIN
-username: admin
-password: Admin@123
-
-USER
-username: user
-password: User@123
-```
-
 ## Authentication
 
 ### Login
@@ -125,11 +118,11 @@ password: User@123
 ```json
 {
   "username": "user",
-  "password": "User@123"
+  "password": "the_password_set_in_SEED_USER_PASSWORD"
 }
 ```
 
-Response:
+Example response:
 
 ```json
 {
@@ -140,7 +133,7 @@ Response:
 }
 ```
 
-Use the token:
+Use the token on protected endpoints:
 
 ```text
 Authorization: Bearer JWT_TOKEN
@@ -163,7 +156,7 @@ PUT /resources/{id}
 DELETE /resources/{id}
 ```
 
-Example:
+Example resource request:
 
 ```json
 {
@@ -177,11 +170,11 @@ Example:
 
 ## Reservation API
 
-### Create Reservation
+### Create Reservation — USER or ADMIN
 
 `POST /reservations`
 
-USER identity is obtained from the authenticated JWT. No `userId` is accepted in the request.
+The authenticated username is obtained from the JWT. No `userId` is accepted in the request.
 
 ```json
 {
@@ -191,13 +184,15 @@ USER identity is obtained from the authenticated JWT. No `userId` is accepted in
 }
 ```
 
-Price is calculated from the resource hourly price and reservation duration.
+New reservations start with `PENDING` status. Price is calculated from resource hourly price and reservation duration.
 
-### List Reservations
+### List Reservations — USER or ADMIN
 
 ```text
 GET /reservations
 ```
+
+ADMIN receives all matching reservations. USER receives only reservations owned by the authenticated JWT user, even when filters are supplied.
 
 Filters:
 
@@ -231,38 +226,48 @@ endTime
 status
 ```
 
-ADMIN receives all reservations.
-
-USER receives only reservations belonging to the authenticated JWT user.
-
-### Get One Reservation
+### Get Reservation — USER or ADMIN
 
 ```text
 GET /reservations/{id}
 ```
 
-### Update Reservation
+USER can access only their own reservation. ADMIN can access any reservation.
 
-ADMIN can update any reservation.
+### Update Reservation — USER or ADMIN
 
-USER can update only their own reservation.
+```text
+PUT /reservations/{id}
+```
+
+USER can update only their own reservation. ADMIN can update any reservation. Ownership is checked in the service layer.
+
+Full update example:
 
 ```json
 {
   "resourceId": 1,
   "startTime": "2030-01-10T11:00:00",
   "endTime": "2030-01-10T13:00:00",
-  "status": "PENDING"
+  "status": "CONFIRMED"
 }
 ```
 
-### Delete Reservation
+Status-only cancellation is supported, including for a reservation that has already started:
+
+```json
+{
+  "status": "CANCELLED"
+}
+```
+
+### Delete Reservation — ADMIN only
 
 ```text
 DELETE /reservations/{id}
 ```
 
-ADMIN only.
+USER cannot delete reservations. USER can cancel their own reservation through the update endpoint.
 
 ## Reservation Status
 
@@ -284,54 +289,19 @@ CANCELLED
 401 UNAUTHORIZED
 403 FORBIDDEN
 404 NOT FOUND
+409 CONFLICT
 500 INTERNAL SERVER ERROR
 ```
 
 ## Security Design
 
 - JWT is validated on every protected request.
-- Session creation policy is stateless.
+- Invalid or expired JWTs return `401 Unauthorized`.
+- Session policy is stateless.
 - Passwords are stored using BCrypt.
-- Role-based authorization uses `ROLE_ADMIN` and `ROLE_USER`.
-- USER reservation ownership is derived from `Authentication.getName()`.
-- `userId` is intentionally absent from the reservation create request.
-- ADMIN can access all reservations.
-- USER access is restricted to their own reservations.
-- Resource write operations are ADMIN-only.
-
-## Testing Checklist
-
-```text
-mvn clean test
-```
-
-Manually verify:
-
-1. Login as ADMIN.
-2. Login as USER.
-3. Access resources with USER.
-4. Confirm USER cannot POST/PUT/DELETE resources.
-5. Create a reservation as USER.
-6. Confirm reservation response contains authenticated USER.
-7. Confirm USER sees only their reservations.
-8. Login as ADMIN.
-9. Confirm ADMIN sees all reservations.
-10. Test PENDING, CONFIRMED and CANCELLED.
-11. Test minPrice and maxPrice.
-12. Test page and size.
-13. Test sorting.
-14. Test invalid dates.
-15. Test invalid resource ID.
-16. Test missing JWT.
-17. Test invalid JWT.
-18. Test BCrypt seed login.
-19. Open Swagger UI.
-20. Run `mvn clean test`.
-
-## Git Commands
-
-```bash
-git add .
-git commit -m "Implement secure resource booking system"
-git push origin <assignment-branch>
-```
+- No plaintext database, JWT, or seed passwords are committed in application source configuration.
+- Role authorization is enforced in Spring Security before controller execution.
+- Reservation ownership is enforced in the service layer.
+- `userId` is absent from reservation create/update requests, preventing identity spoofing.
+- USER cannot modify resources or delete reservations.
+- ADMIN can manage all resources and reservations.

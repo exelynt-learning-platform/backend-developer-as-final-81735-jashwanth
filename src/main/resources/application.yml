@@ -5,7 +5,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/resource_booking}
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:postgres}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -22,8 +22,14 @@ server:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:VGhpc0lzQVNlY3VyZVN1ZmZpY2llbnRMb25nSldUSFNlY3JldEZvckRldmVsb3BtZW50MTIzNDU2Nzg5}
+    secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  seed:
+    enabled: ${SEED_USERS_ENABLED:false}
+    admin-username: ${SEED_ADMIN_USERNAME:admin}
+    admin-password: ${SEED_ADMIN_PASSWORD:}
+    user-username: ${SEED_USER_USERNAME:user}
+    user-password: ${SEED_USER_PASSWORD:}
 
 springdoc:
   api-docs:

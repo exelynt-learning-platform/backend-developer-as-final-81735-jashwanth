@@ -2,7 +2,8 @@ package com.example.booking.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -22,6 +23,7 @@ import java.util.Map;
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final ObjectMapper objectMapper;
 
@@ -37,22 +39,16 @@ public class SecurityConfig {
                 .cors(cors -> {})
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(exceptions -> exceptions
-                        .authenticationEntryPoint((request, response, ex) -> {
-                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                            objectMapper.writeValue(response.getOutputStream(), errorBody(
-                                    HttpServletResponse.SC_UNAUTHORIZED,
-                                    "Unauthorized",
-                                    "Authentication is required"));
-                        })
-                        .accessDeniedHandler((request, response, ex) -> {
-                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                            objectMapper.writeValue(response.getOutputStream(), errorBody(
-                                    HttpServletResponse.SC_FORBIDDEN,
-                                    "Forbidden",
-                                    "Access denied"));
-                        }))
+                        .authenticationEntryPoint((request, response, ex) -> writeError(
+                                response,
+                                HttpServletResponse.SC_UNAUTHORIZED,
+                                "Unauthorized",
+                                "Authentication is required"))
+                        .accessDeniedHandler((request, response, ex) -> writeError(
+                                response,
+                                HttpServletResponse.SC_FORBIDDEN,
+                                "Forbidden",
+                                "Access denied")))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
@@ -60,12 +56,19 @@ public class SecurityConfig {
                         .requestMatchers("/resources/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/reservations/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/reservations/**").hasAnyRole("USER", "ADMIN")
-                        .requestMatchers("/reservations/**").hasRole("ADMIN")
-                        .anyRequest().authenticated()
-                )
+                        .requestMatchers(HttpMethod.PUT, "/reservations/**").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/reservations/**").hasRole("ADMIN")
+                        .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    private void writeError(HttpServletResponse response, int status, String error, String message)
+            throws java.io.IOException {
+        response.setStatus(status);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        objectMapper.writeValue(response.getOutputStream(), errorBody(status, error, message));
     }
 
     private Map<String, Object> errorBody(int status, String error, String message) {
